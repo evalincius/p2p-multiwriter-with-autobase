@@ -7,6 +7,8 @@ import crypto from 'crypto'
 import lexint from 'lexicographic-integer'
 import ram from 'random-access-memory'
 import chalk from 'chalk';
+import EventEmitter from 'events'
+
 
 
 // parse argument options
@@ -26,8 +28,10 @@ const args = minimist(process.argv, {
 
 let writer;
 let viewOutput;
-class Hypernews {
+class Hypernews extends EventEmitter {
     constructor () {
+        super()
+
         this.store = new Corestore(args.ram ? ram : (args.storage || 'hypernews'))
         this.swarm = null
         this.autobase = null
@@ -51,6 +55,7 @@ class Hypernews {
         })
           
         for (const w of [].concat(args.writers || [])) {
+           this.setupAutobaseExtension(Buffer.from(w, 'hex'))
             await this.autobase.addInput(this.store.get(Buffer.from(w, 'hex')))
         }
 
@@ -69,17 +74,15 @@ class Hypernews {
             this.swarm.on('connection', (socket, info) => {
               
               console.log(chalk.greenBright('---> Connected to Topic'))
-              console.log(chalk.greenBright(info.publicKey.toString('hex')))
-
               // socket.once("data", data => {
               //   console.log(chalk.green('---> Got Data from Socket'));
               //   console.log(chalk.green(data.toString()));
               // });
 
-              socket.on("data", data => {
-                console.log(chalk.red('---> Got Data from Socket'));
-                console.log(chalk.red(data.toString()));
-              });
+              // socket.on("data", data => {
+              //   console.log(chalk.red('---> Got Data from Socket'));
+              //   console.log(data.toString());
+              // });
           
               socket.on("connect", () => {
                 console.log(chalk.greenBright('---> Connected to Socket'))
@@ -90,7 +93,7 @@ class Hypernews {
 
 
 
-            this.swarm.join(topic)
+            const discovery = this.swarm.join(topic)
             await this.swarm.flush()
 
             process.once('SIGINT', () => {
@@ -113,6 +116,35 @@ class Hypernews {
         })
         this.autobase.ready()
         this.bee = this.autobase.view
+    }
+
+    setupAutobaseExtension(key) {
+
+      console.log('setupAutobaseExtension called ');
+
+
+      		// Set up extension on root
+      const root = this.store.get(key)
+      const addWritersExt = root.registerExtension('polycore', {
+        encoding: 'json',
+        onmessage: async msg => {
+          console.log('called here');
+          const batch = this.autobase.memberBatch()
+          msg.writers.forEach(key => console.log('KEY to be added is :' + key))
+          msg.writers.forEach(key => batch.addInput(this.store.get(Buffer.from(key, 'hex'))))
+          await batch.commit()
+        }
+		  })
+
+      root.on('peer-add', peer => {
+        console.log('peer-add called');
+
+        addWritersExt.send({
+          writers: this.autobase.inputs.map(core => core.key.toString('hex')),
+        }, peer)
+
+        this.emit('peer-add', peer)
+      })
     }
 
     async applyAutobeeBatch (bee, batch) {
@@ -166,10 +198,14 @@ class Hypernews {
         console.log('To use another storage directory use --storage ./another')
         console.log('To disable swarming add --no-swarm')
         console.log()
+        console.log()
         console.log('current peers joined swarm:')
-        for(const key of this.swarm.peers.keys()){
-          console.log(this.swarm.peers.get(key).publicKey.toString('hex'))
+        if(this.swarm) {
+          for(const key of this.swarm.peers.keys()){
+            console.log(this.swarm.peers.get(key).publicKey.toString('hex'))
+          }
         }
+
 
     }
 
@@ -226,7 +262,7 @@ class Hypernews {
           }
     }
 
-    async reconnectSwarm(){
+    async addNewPeer(peerPublicKey){
       console.log('Explicitly start listening for incoming swarm connections')
       await swarm.listen()
     }
