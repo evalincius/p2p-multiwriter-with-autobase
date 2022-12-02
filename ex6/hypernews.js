@@ -21,6 +21,7 @@ const args = minimist(process.argv, {
     },
     default: {
       swarm: true
+      
     },
     boolean: ['ram', 'swarm']
   })
@@ -54,9 +55,20 @@ class Hypernews extends EventEmitter {
             outputs: [viewOutput]
         })
           
-        for (const w of [].concat(args.writers || [])) {
-           this.setupAutobaseExtension(Buffer.from(w, 'hex'))
-            await this.autobase.addInput(this.store.get(Buffer.from(w, 'hex')))
+        const listOfPeers = [].concat(args.writers || [])
+
+        if(listOfPeers.length == 0 ) {
+          console.log(chalk.blueBright('Acting as Initiator'))
+          console.log(chalk.blueBright(`Key to join Room: ${writer.key.toString('hex')}` ))
+          this.setupAutobaseExtension(writer)
+
+        } else {
+          console.log(chalk.blueBright('Acting as Peer'))
+          for (const w of listOfPeers) {
+            const coreToJoin = this.store.get(Buffer.from(w, 'hex'))
+            this.setupAutobaseExtension(coreToJoin)
+            await this.autobase.addInput(coreToJoin)
+         }
         }
 
         for (const i of [].concat(args.indexes || [])) {
@@ -118,14 +130,12 @@ class Hypernews extends EventEmitter {
         this.bee = this.autobase.view
     }
 
-    setupAutobaseExtension(key) {
+    setupAutobaseExtension(hypercore) {
 
       console.log('setupAutobaseExtension called ');
 
-
-      		// Set up extension on root
-      const root = this.store.get(key)
-      const addWritersExt = root.registerExtension('polycore', {
+      	// Set up extension on hypercore
+      const addWritersExt = hypercore.registerExtension('polycore', {
         encoding: 'json',
         onmessage: async msg => {
           console.log('called here');
@@ -136,7 +146,7 @@ class Hypernews extends EventEmitter {
         }
 		  })
 
-      root.on('peer-add', peer => {
+      hypercore.on('peer-add', peer => {
         console.log('peer-add called');
 
         addWritersExt.send({
