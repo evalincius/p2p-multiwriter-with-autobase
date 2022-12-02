@@ -6,6 +6,7 @@ import Hyperbee from 'hyperbee'
 import crypto from 'crypto'
 import lexint from 'lexicographic-integer'
 import ram from 'random-access-memory'
+import chalk from 'chalk';
 
 
 // parse argument options
@@ -58,14 +59,45 @@ class Hypernews {
         }
 
         await this.autobase.ready()
+        this.autobase.on('append', async function () {
+          console.log(chalk.green('---> Autobase was updated'));
+        });
 
         if (args.swarm) {
             const topic = Buffer.from(sha256(this.name), 'hex')
             this.swarm = new Hyperswarm()
-            this.swarm.on('connection', (socket) => this.store.replicate(socket))
+            this.swarm.on('connection', (socket, info) => {
+              
+              console.log(chalk.greenBright('---> Connected to Topic'))
+              // this.swarm.joinPeer(info.publicKey)
+
+              // socket.once("data", data => {
+              //   console.log(chalk.green('---> Got Data from Socket'));
+              //   console.log(chalk.green(data.toString()));
+              // });
+
+              socket.on("data", data => {
+                console.log(chalk.red('---> Got Data from Socket'));
+                console.log(chalk.red(data.toString()));
+              });
+          
+              socket.on("connect", () => {
+                console.log(chalk.greenBright('---> Connected to Socket'))
+              });
+
+              this.store.replicate(socket)
+            })
+
+
+
             this.swarm.join(topic)
             await this.swarm.flush()
-            process.once('SIGINT', () => this.swarm.destroy()) // for faster restarts
+
+            process.once('SIGINT', () => {
+              console.log(chalk.red('---> ON SIGINT'));
+              this.swarm.leave(topic)
+              this.swarm.destroy()
+            }) // for faster restarts
         }
     
         this.info()
@@ -134,6 +166,11 @@ class Hypernews {
         console.log('To use another storage directory use --storage ./another')
         console.log('To disable swarming add --no-swarm')
         console.log()
+        console.log('current peers joined swarm:')
+        for(const key of this.swarm.peers.keys()){
+          console.log(this.swarm.peers.get(key).publicKey.toString('hex'))
+        }
+
     }
 
     async post (message) {
