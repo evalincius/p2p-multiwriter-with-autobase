@@ -69,7 +69,7 @@ class Hypernews {
             this.swarm.on('connection', (socket, info) => {
               
               console.log(chalk.greenBright('---> Connected to Topic'))
-              // this.swarm.joinPeer(info.publicKey)
+              console.log(chalk.greenBright(info.publicKey.toString('hex')))
 
               // socket.once("data", data => {
               //   console.log(chalk.green('---> Got Data from Socket'));
@@ -224,6 +224,11 @@ class Hypernews {
         for await (const node of this.autobase.createCausalStream()) {
             console.log(node.value.toString())
           }
+    }
+
+    async reconnectSwarm(){
+      console.log('Explicitly start listening for incoming swarm connections')
+      await swarm.listen()
     }
 
 }
