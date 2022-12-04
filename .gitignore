@@ -44,6 +44,8 @@ node_modules/
 jspm_packages/
 peer-store/
 hypernews/
+hypernews2/
+hypernews3/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/

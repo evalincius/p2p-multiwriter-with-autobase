@@ -7,7 +7,6 @@ import crypto from 'crypto'
 import lexint from 'lexicographic-integer'
 import ram from 'random-access-memory'
 import chalk from 'chalk';
-import EventEmitter from 'events'
 
 
 
@@ -29,10 +28,8 @@ const args = minimist(process.argv, {
 
 let writer;
 let viewOutput;
-class Hypernews extends EventEmitter {
+class Hypernews {
     constructor () {
-        super()
-
         this.store = new Corestore(args.ram ? ram : (args.storage || 'hypernews'))
         this.swarm = null
         this.autobase = null
@@ -64,6 +61,8 @@ class Hypernews extends EventEmitter {
 
         } else {
           console.log(chalk.blueBright('Acting as Peer'))
+          console.log(chalk.blueBright(`Key to join Room: ${writer.key.toString('hex')}` ))
+
           for (const w of listOfPeers) {
             const coreToJoin = this.store.get(Buffer.from(w, 'hex'))
             this.setupAutobaseExtension(coreToJoin)
@@ -84,17 +83,6 @@ class Hypernews extends EventEmitter {
             const topic = Buffer.from(sha256(this.name), 'hex')
             this.swarm = new Hyperswarm()
             this.swarm.on('connection', (socket, info) => {
-              
-              // console.log(chalk.greenBright('---> Connected to Topic'))
-              // socket.once("data", data => {
-              //   console.log(chalk.green('---> Got Data from Socket'));
-              //   console.log(chalk.green(data.toString()));
-              // });
-
-              // socket.on("data", data => {
-              //   console.log(chalk.red('---> Got Data from Socket'));
-              //   console.log(data.toString());
-              // });
           
               socket.on("connect", () => {
                 console.log(chalk.greenBright('---> Connected to Socket'))
@@ -102,8 +90,6 @@ class Hypernews extends EventEmitter {
 
               this.store.replicate(socket)
             })
-
-
 
             const discovery = this.swarm.join(topic)
             await this.swarm.flush()
@@ -117,8 +103,6 @@ class Hypernews extends EventEmitter {
     
         this.info()
 
-
-        
         const self = this
 
         this.autobase.start({
@@ -134,27 +118,25 @@ class Hypernews extends EventEmitter {
 
       console.log('setupAutobaseExtension called ');
 
-      	// Set up extension on hypercore
+      const hyp = hypercore;
       const addWritersExt = hypercore.registerExtension('polycore', {
         encoding: 'json',
         onmessage: async msg => {
           console.log('called here');
-          const batch = this.autobase.memberBatch()
-          msg.writers.forEach(key => console.log('KEY to be added is :' + key))
-          msg.writers.forEach(key => batch.addInput(this.store.get(Buffer.from(key, 'hex'))))
-          await batch.commit()
+          console.log(`from:  ${msg.writers} at ${hyp.key.toString('hex')}`)
+          const coreToJoin = this.store.get(Buffer.from(msg.writers, 'hex'))
+          await this.autobase.addInput(coreToJoin)
         }
 		  })
+      
 
       hypercore.on('peer-add', peer => {
         console.log('peer-add called');
-
         addWritersExt.send({
-          writers: this.autobase.inputs.map(core => core.key.toString('hex')),
+          writers: writer.key.toString('hex'),
         }, peer)
-
-        this.emit('peer-add', peer)
       })
+
     }
 
     async applyAutobeeBatch (bee, batch) {
@@ -199,7 +181,7 @@ class Hypernews extends EventEmitter {
     info () {
         console.log('Autobase setup. Pass this to run this same setup in another instance:')
         console.log()
-        console.log('hrepl hypernews.js ' +
+        console.log('hrepl custom1/hypernews.js ' +
           '-n ' + this.name + ' ' +
           this.autobase.inputs.map(i => '-w ' + i.key.toString('hex')).join(' ') + ' ' +
           this.autobase.outputs.map(i => '-i ' + i.key.toString('hex')).join(' ')
@@ -207,16 +189,6 @@ class Hypernews extends EventEmitter {
         console.log()
         console.log('To use another storage directory use --storage ./another')
         console.log('To disable swarming add --no-swarm')
-        console.log()
-        console.log()
-        console.log('current peers joined swarm:')
-        if(this.swarm) {
-          for(const key of this.swarm.peers.keys()){
-            console.log(this.swarm.peers.get(key).publicKey.toString('hex'))
-          }
-        }
-
-
     }
 
     async post (message) {

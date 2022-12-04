@@ -42,6 +42,8 @@ class Hypernews extends EventEmitter {
 
     async start () {
         writer = this.store.get({ name: 'writer' })
+        writer.on('tirly', (msg) => console.log(msg))
+
         viewOutput = this.store.get({ name: 'view' })
 
         await writer.ready()
@@ -58,15 +60,16 @@ class Hypernews extends EventEmitter {
         const listOfPeers = [].concat(args.writers || [])
 
         if(listOfPeers.length == 0 ) {
-          console.log(chalk.blueBright('Acting as Initiator'))
-          console.log(chalk.blueBright(`Key to join Room: ${writer.key.toString('hex')}` ))
-          this.setupAutobaseExtension(writer)
+          // console.log(chalk.blueBright('Acting as Initiator'))
+          // console.log(chalk.blueBright(`Key to join Room: ${writer.key.toString('hex')}` ))
+          // this.setupAutobaseExtension(writer)
 
         } else {
           console.log(chalk.blueBright('Acting as Peer'))
           for (const w of listOfPeers) {
             const coreToJoin = this.store.get(Buffer.from(w, 'hex'))
-            this.setupAutobaseExtension(coreToJoin)
+            const a = coreToJoin.emit('tirly', 'hi')
+            // this.setupAutobaseExtension(coreToJoin)
             await this.autobase.addInput(coreToJoin)
          }
         }
@@ -84,26 +87,12 @@ class Hypernews extends EventEmitter {
             const topic = Buffer.from(sha256(this.name), 'hex')
             this.swarm = new Hyperswarm()
             this.swarm.on('connection', (socket, info) => {
-              
-              // console.log(chalk.greenBright('---> Connected to Topic'))
-              // socket.once("data", data => {
-              //   console.log(chalk.green('---> Got Data from Socket'));
-              //   console.log(chalk.green(data.toString()));
-              // });
-
-              // socket.on("data", data => {
-              //   console.log(chalk.red('---> Got Data from Socket'));
-              //   console.log(data.toString());
-              // });
-          
               socket.on("connect", () => {
                 console.log(chalk.greenBright('---> Connected to Socket'))
               });
 
               this.store.replicate(socket)
             })
-
-
 
             const discovery = this.swarm.join(topic)
             await this.swarm.flush()
@@ -199,7 +188,7 @@ class Hypernews extends EventEmitter {
     info () {
         console.log('Autobase setup. Pass this to run this same setup in another instance:')
         console.log()
-        console.log('hrepl hypernews.js ' +
+        console.log('hrepl custom2/hypernews.js ' +
           '-n ' + this.name + ' ' +
           this.autobase.inputs.map(i => '-w ' + i.key.toString('hex')).join(' ') + ' ' +
           this.autobase.outputs.map(i => '-i ' + i.key.toString('hex')).join(' ')
@@ -207,16 +196,6 @@ class Hypernews extends EventEmitter {
         console.log()
         console.log('To use another storage directory use --storage ./another')
         console.log('To disable swarming add --no-swarm')
-        console.log()
-        console.log()
-        console.log('current peers joined swarm:')
-        if(this.swarm) {
-          for(const key of this.swarm.peers.keys()){
-            console.log(this.swarm.peers.get(key).publicKey.toString('hex'))
-          }
-        }
-
-
     }
 
     async post (message) {
@@ -265,7 +244,23 @@ class Hypernews extends EventEmitter {
       console.log('listing peers for a5437f87c684bd83b2347aa287953aa8baba8420223a096cf4abb07814533400')
 
       root.peers.map(peer => console.log(peer))
+    }
 
+
+    async listPosts() {
+        // The block at index 0 is a header block, so we skip over that.
+        console.log(this.autobase.view.feed.status)
+
+        //console.log(viewOutput)
+        for (let i = 0; i < viewOutput.length; i++) {
+          const node = await viewOutput.get(i)
+          console.log(node.value.toString())
+        }
+    }
+
+
+    testEmmiter(){
+      writer.emit('tirly', 'hi')
     }
 
 }
